@@ -1587,18 +1587,25 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 
 	var errorsCount int
 	var connectionErrorsCount int
+	var wg sync.WaitGroup
 
 	for _, dsn := range dsns {
-		if err := e.scrapeDSN(ch, dsn); err != nil {
-			errorsCount++
+		wg.Add(1)
+		go func(dsn string) {
+			defer wg.Done()
+			if err := e.scrapeDSN(ch, dsn); err != nil {
+				errorsCount++
 
-			log.Errorf(err.Error())
+				log.Errorf(err.Error())
 
-			if _, ok := err.(*ErrorConnectToServer); ok {
-				connectionErrorsCount++
+				if _, ok := err.(*ErrorConnectToServer); ok {
+					connectionErrorsCount++
+				}
 			}
-		}
+		}(dsn)
 	}
+
+	wg.Wait()
 
 	switch {
 	case connectionErrorsCount >= len(dsns):
